@@ -148,6 +148,8 @@ _parse_zones() {
     local _zoneName=""
     local _zoneFile=""
     local _zoneType=""
+    local _rccheckzone
+    local _rc
     local _zoneIsNext # zone is next in the input
     local _fileIsNext # zone file is next in the input
     local _typeIsNext # type of zone is next in the input
@@ -177,6 +179,13 @@ _parse_zones() {
 	if [[ -n "${_zoneName}" && -n "${_zoneFile}" && -n "${_zoneType}" ]]; then
 	    _msg_debug "Got one zone : ${_zoneName} | ${_zoneType} | ${_zoneFile}"
 	    _named_checkzone "${_zoneName}" "${_zoneFile}" "${_zoneType}"
+	    _rccheckzone=$?
+	    
+	    # save the returned code
+	    if [ ${_rccheckzone} -ne 0 ]; then
+		_rc=${_rccheckzone}
+	    fi
+
 	    _zoneName=""
 	    _zoneFile=""
 	    _zoneType=""
@@ -210,6 +219,8 @@ _parse_zones() {
     done
 
     _msg_debug "Returning from function '${FUNCNAME}' ..."
+
+    return ${_rc}
 }
 
 # Main loop
@@ -218,7 +229,10 @@ main() {
 	_msg_error "Cannot proceed due to errors detected in main config file" 1
     fi
     
-    _parse_zones /etc/bind/named.conf.local
+    if ! _parse_zones /etc/bind/named.conf.local ; then
+	_msg_error "There were problems detected with your zones" 0
+	_msg_error "Please check your zone files and fix the errors" 1
+    fi
     
     exit 0 # EX_OK
 }
