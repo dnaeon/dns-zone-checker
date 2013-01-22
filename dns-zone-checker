@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+
+# global variables
+_PROG_NAME=$( basename $0 )
+_PROG_VERSION="1.0"
+_PROG_PID="$$"
+_PROG_LOGFILE="/var/log/${_PROG_NAME}.log"
+_PROG_LOCKFILE="/var/run/${_PROG_NAME}.pid"
+
+# Options configurable variables
+_debug="" # -d switch
+
+# Display an INFO message
+# $1: Message to display
+_msg_info() {
+    local _msg="${1}"
+    local _txtbold=$( tput bold )
+    local _txtcolor=$( tput setaf 2 )
+    local _txtreset=$( tput sgr0 )
+
+    echo ">>> ${_PROG_NAME}[${_PROG_PID}] ${_txtbold}${_txtcolor}INFO${_txtreset}  : ${_msg}"
+}
+
+# Display a DEBUG message
+# $1: Message to display
+_msg_debug() {
+    local _msg="${1}"
+    local _txtbold=$( tput bold )
+    local _txtcolor=$( tput setaf 6 )
+    local _txtreset=$( tput sgr0 )
+
+    if [[ -n "${_debug}" ]]; then
+	echo ">>> ${_PROG_NAME}[${_PROG_PID}] ${_txtbold}${_txtcolor}DEBUG${_txtreset} : ${_msg}"
+    fi
+}
+
+# Display an ERROR message
+# $1: Message to display
+# $2: Exit code
+_msg_error() {
+    local _msg="${1}"
+    local _rc=${2}
+    local _txtbold=$( tput bold )
+    local _txtcolor=$( tput setaf 1 )
+    local _txtreset=$( tput sgr0 )
+    
+    echo ">>> ${_PROG_NAME}[${_PROG_PID}] ${_txtbold}${_txtcolor}ERROR${_txtreset} : ${_msg}"
+
+    if [ ${_rc} -ne 0 ]; then
+        exit ${_rc}
+    fi
+}
+
+# Provide a yes/no prompt to the user
+# $1: Prompt message
+# return: 0 if user selected YES, 1 if NO
+_yesno_prompt() {
+    local _msg="${1}"
+    local _txtbold=$( tput bold )
+    local _txtorange=$( tput setaf 3 )
+    local _txtreset=$( tput sgr0 )
+    local _answer
+
+    read -p ">>> [${_PROG_NAME}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: " _answer
+
+    case "${_answer}" in
+	[Yy])
+	    return 0
+	    ;;
+	[Nn])
+	    return 1
+	    ;;
+	*)
+	    _yesno_prompt "${_msg}"
+	    ;;
+    esac
+}
+
+# Displays usage information
+# return: 64 (EX_USAGE)
+_usage() {
+    
+    echo "usage: ${_PROG_NAME} [-d]"
+    echo ""
+    echo "Global options supported:"
+    echo "	-d	Debug log level"
+    echo ""
+
+    exit 64 # EX_USAGE
+}
+
+# Sanity check the main named config file
+# return: 0 on success, != 0 otherwise
+_named_checkconf() {
+    local _rc
+    
+    _msg_debug "Entering function '${FUNCNAME}' ..."
+
+    _msg_info "Sanity checking named configuration file"
+    named-checkconf > /dev/null 2>&1
+    _rc=$?
+
+    if [ ${_rc} -ne 0 ]; then
+	_msg_error "Syntax errors detected in main config file" 0
+    else
+	_msg_info "Main config file looks good"
+    fi
+
+    _msg_debug "Returning from function '${FUNCNAME}' ..."
+
+    return ${_rc}
+}
+
+# Sanity check a zone file
+# $1: zone name
+# $2: zone type
+# $3: zone file
+# return: 0 on success, != 0 otherwise
+_named_checkzone() {
+    local _zoneName="${1}"
+    local _zoneFile="${2}"
+    local _zoneType="${3}"
+    local _rc
+
+    _msg_debug "Entering function '${FUNCNAME}' ..."
+
+    _msg_debug "Checking zone ${_zoneName} @ ${_zoneFile} [${_zoneType}]"
+    named-checkzone "${_zoneName}" "${_zoneFile}" > /dev/null 2>&1
+    _rc=$?
+
+    if [ ${_rc} -ne 0 ]; then
+	_msg_error "Errors detected in zone ${_zoneName} @ ${_zoneFile} [${_zoneType}]" 0
+    else
+	_msg_info "Zone verified ${_zoneName} @ ${_zoneFile} [${_zoneType}]"
+    fi
+
+    _msg_debug "Returning from function '${FUNCNAME}' ..."
+
+    return ${_rc}
+}
+
+# Parse the main BIND configuration file 
+# $1: Path to the BIND configuration file
+_parse_zones() {
+    local _conffile="${1}"
+    local _line=""
+    local _zoneName=""
+    local _zoneFile=""
+    local _zoneType=""
+    local _zoneIsNext # zone is next in the input
+    local _fileIsNext # zone file is next in the input
+    local _typeIsNext # type of zone is next in the input
+    local _gotAll     # got all info about a zone?
+    
+    # flags used to identify what comes next in the input
+    _zoneIsNext=0
+    _fileIsNext=0
+    _typeIsNext=0
+
+    _msg_debug "Entering function '${FUNCNAME}' ..."
+
+    for _line in $( egrep -v '^//' ${_conffile} | sed -e 's|;||g' -e 's|"||g' ); do
+
+	if [ ${_zoneIsNext} -eq 1 ]; then
+	    _zoneName="${_line}"
+	    _msg_debug "Found zone name ${_zoneName}"
+	elif [ ${_fileIsNext} -eq 1 ]; then
+	    _zoneFile="${_line}"
+	    _msg_debug "Found zone fil ${_zoneFile}"
+	elif [ ${_typeIsNext} -eq 1 ]; then
+	    _zoneType="${_line}"
+	    _msg_debug "Found zone type ${_zoneType}"
+	fi
+
+	# do we have everything we need for a zone?
+	if [[ -n "${_zoneName}" && -n "${_zoneFile}" && -n "${_zoneType}" ]]; then
+	    _msg_debug "Got one zone : ${_zoneName} | ${_zoneType} | ${_zoneFile}"
+	    _named_checkzone "${_zoneName}" "${_zoneFile}" "${_zoneType}"
+	    _zoneName=""
+	    _zoneFile=""
+	    _zoneType=""
+	fi
+	
+	# zone name comes next in the input
+	if echo ${_line} | egrep '^zone$' > /dev/null; then
+	    _zoneIsNext=1
+	    _msg_debug "Zone name is next in the input"
+	    continue
+	fi
+
+	# file name comes next in the input
+	if echo ${_line} | egrep '^file$' > /dev/null; then
+	    _fileIsNext=1
+	    _msg_debug "File name is next in the input"
+	    continue
+	fi
+	
+	# type is next in the input
+	if echo ${_line} | egrep '^type$' > /dev/null; then
+	    _typeIsNext=1
+	    _msg_debug "Zone type is next in the input"
+	    continue
+	fi
+
+	_msg_debug "Resetting zone flags"
+	_zoneIsNext=0
+	_fileIsNext=0
+	_typeIsNext=0
+    done
+
+    _msg_debug "Returning from function '${FUNCNAME}' ..."
+}
+
+# Main loop
+main() {
+    _named_checkconf
+    
+    _parse_zones /etc/bind/named.conf.local
+    
+    exit 0 # EX_OK
+}
+
+# Parse command-line options
+while getopts 'd' arg; do
+    case ${arg} in
+	d) _debug=1 ;;
+	?) _usage ;;
+    esac
+done
+	
+main
+
