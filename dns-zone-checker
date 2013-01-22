@@ -108,7 +108,12 @@ _named_checkconf() {
     _msg_debug "Entering function '${FUNCNAME}' ..."
 
     _msg_info "Sanity checking named configuration file"
-    named-checkconf > /dev/null 2>&1
+    
+    if [ ! -r /etc/bind/named.conf ]; then
+	_msg_error "Cannot open named.conf for reading" 1
+    fi
+    
+    /usr/sbin/named-checkconf > /dev/null 2>&1
     _rc=$?
 
     if [ ${_rc} -ne 0 ]; then
@@ -136,7 +141,7 @@ _named_checkzone() {
     _msg_debug "Entering function '${FUNCNAME}' ..."
 
     _msg_debug "Checking zone ${_zoneName} @ ${_zoneFile} [${_zoneType}]"
-    named-checkzone "${_zoneName}" "${_zoneFile}" > /dev/null 2>&1
+    /usr/sbin/named-checkzone "${_zoneName}" "${_zoneFile}" > /dev/null 2>&1
     _rc=$?
 
     if [ ${_rc} -ne 0 ]; then
