@@ -171,7 +171,7 @@ _named_checkzone() {
     if [ ${_rc} -ne 0 ]; then
 	_msg_error "Errors detected in zone ${_zoneName} @ ${_zoneFile} [${_zoneType}]" 0
     else
-	_msg_info "Zone verified ${_zoneName} @ ${_zoneFile} [${_zoneType}]"
+	_msg_info "Verified zone ${_zoneName} @ ${_zoneFile} [${_zoneType}]"
     fi
 
     _msg_debug "Returning from function '${FUNCNAME}' ..."
