@@ -80,10 +80,11 @@ _yesno_prompt() {
 # return: 64 (EX_USAGE)
 _usage() {
     
-    echo "usage: ${_PROG_NAME} [-d]"
+    echo "usage: ${_PROG_NAME} [-dh]"
     echo ""
     echo "Global options supported:"
     echo "	-d	Debug log level"
+    echo "	-h	Display usage info"
     echo ""
 
     exit 64 # EX_USAGE
@@ -221,9 +222,10 @@ main() {
 }
 
 # Parse command-line options
-while getopts 'd' arg; do
+while getopts 'dh' arg; do
     case ${arg} in
 	d) _debug=1 ;;
+	h) _usage ;;
 	?) _usage ;;
     esac
 done
