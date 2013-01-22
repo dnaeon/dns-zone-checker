@@ -9,7 +9,7 @@ _PROG_LOCKFILE="/var/run/${_PROG_NAME}.pid"
 
 # Options configurable variables
 _debug="" 	# -d switch
-_restart=""	# -r switch
+_reload=""	# -r switch
 _yes=""		# -y switch
 
 # Display an INFO message
@@ -65,10 +65,10 @@ _yesno_prompt() {
 
     # if user chose to assume yes to all questions
     if [ -n "${_yes}" ]; then
-	echo ">>> [${_PROG_NAME}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: YES (preselected)"
+	echo ">>> ${_PROG_NAME}[${_PROG_PID}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: YES (preselected)"
 	return 0
     else
-	read -p ">>> [${_PROG_NAME}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: " _answer
+	read -p ">>> ${_PROG_NAME}[${_PROG_PID}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: " _answer
     fi
 	
     case "${_answer}" in
@@ -88,12 +88,12 @@ _yesno_prompt() {
 # return: 64 (EX_USAGE)
 _usage() {
     
-    echo "usage: ${_PROG_NAME} [-dh]"
+    echo "usage: ${_PROG_NAME} [-dyrh]"
     echo ""
     echo "Global options supported:"
     echo "	-d	Debug log level"
     echo "	-y	Assume 'yes' to all prompts"
-    echo "	-r 	Request to restart the named daemon"
+    echo "	-r 	Request to reload the BIND daemon"
     echo "	-h	Display usage info"
     echo ""
 
@@ -145,6 +145,30 @@ _named_checkzone() {
 	_msg_info "Zone verified ${_zoneName} @ ${_zoneFile} [${_zoneType}]"
     fi
 
+    _msg_debug "Returning from function '${FUNCNAME}' ..."
+
+    return ${_rc}
+}
+
+# Reloads the BIND daemon
+# return: 0 on success, != 0 otherwise
+_named_reload() {
+    local _rc=0
+
+    _msg_debug "Entering function '${FUNCNAME}' ..."
+
+    if _yesno_prompt "Are you sure you wish to reload the BIND daemon?" ; then
+	service bind9 reload > /dev/null 2>&1
+	_rc=$?
+
+	if [ ${_rc} -ne 0 ]; then
+	    _msg_error "Failed to reload the BIND daemon" 0
+	    _msg_error "Please investigate and fix the issue!" ${_rc}
+	else
+	    _msg_info "BIND daemon successfully reloaded"
+	fi
+    fi
+    
     _msg_debug "Returning from function '${FUNCNAME}' ..."
 
     return ${_rc}
@@ -243,17 +267,21 @@ main() {
 	_msg_error "There were problems detected with your zones" 0
 	_msg_error "Please check your zone files and fix the errors" 1
     fi
-    
+
+    if [ -n "${_reload}" ]; then
+	_named_reload
+    fi
+
     exit 0 # EX_OK
 }
 
 # Parse command-line options
-while getopts 'dh' arg; do
+while getopts 'dyrh' arg; do
     case ${arg} in
 	d) _debug=1 ;;
 	h) _usage ;;
 	y) _yes=1 ;;
-	r) _restart=1 ;;
+	r) _reload=1 ;;
 	?) _usage ;;
     esac
 done
