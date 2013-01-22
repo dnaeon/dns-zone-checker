@@ -8,7 +8,9 @@ _PROG_LOGFILE="/var/log/${_PROG_NAME}.log"
 _PROG_LOCKFILE="/var/run/${_PROG_NAME}.pid"
 
 # Options configurable variables
-_debug="" # -d switch
+_debug="" 	# -d switch
+_restart=""	# -r switch
+_yes=""		# -y switch
 
 # Display an INFO message
 # $1: Message to display
@@ -61,8 +63,14 @@ _yesno_prompt() {
     local _txtreset=$( tput sgr0 )
     local _answer
 
-    read -p ">>> [${_PROG_NAME}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: " _answer
-
+    # if user chose to assume yes to all questions
+    if [ -n "${_yes}" ]; then
+	echo ">>> [${_PROG_NAME}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: YES (preselected)"
+	return 0
+    else
+	read -p ">>> [${_PROG_NAME}] ${_txtbold}${_txtorange}INPUT${_txtreset} : ${_msg} [y/n]: " _answer
+    fi
+	
     case "${_answer}" in
 	[Yy])
 	    return 0
@@ -84,6 +92,8 @@ _usage() {
     echo ""
     echo "Global options supported:"
     echo "	-d	Debug log level"
+    echo "	-y	Assume 'yes' to all prompts"
+    echo "	-r 	Request to restart the named daemon"
     echo "	-h	Display usage info"
     echo ""
 
@@ -242,6 +252,8 @@ while getopts 'dh' arg; do
     case ${arg} in
 	d) _debug=1 ;;
 	h) _usage ;;
+	y) _yes=1 ;;
+	r) _restart=1 ;;
 	?) _usage ;;
     esac
 done
