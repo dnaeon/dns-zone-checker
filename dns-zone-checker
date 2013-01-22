@@ -162,6 +162,11 @@ _named_reload() {
 
     _msg_debug "Entering function '${FUNCNAME}' ..."
 
+    if [ ${EUID} -ne 0 ]; then
+	_msg_error "Non-root user requested to reload the BIND daemon" 0
+	_msg_error "Refusing to reload the BIND daemon" 1
+    fi
+
     if _yesno_prompt "Are you sure you wish to reload the BIND daemon?" ; then
 	service bind9 reload > /dev/null 2>&1
 	_rc=$?
